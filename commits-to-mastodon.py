@@ -179,8 +179,11 @@ def main():
     for line in commits.split("\n"):
         if not line:
             continue
-        account = line.split()[0]
-        message = " ".join(line.split()[1:])
+        if line.split()[0] != "nostabletag":
+            account = "openbsd_stable"
+        else:
+            account = line.split()[1]
+        message = " ".join(line.split()[2:])
         add_sqlite(conn, account, message)
     conn.commit()
     tootifneeded(conn)

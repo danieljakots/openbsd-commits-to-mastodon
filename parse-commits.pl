@@ -51,14 +51,20 @@ sub check_message {
     return unless $details->{id};
 
     my ( $message, $params ) = make_tweet($details);
-    tweet( $message, $params )
+
+    if ($details->{Tag}) {
+        tweet( $message, $params, $details->{Tag} );
+    } else {
+        tweet( $message, $params, 'nostabletag' );
+    }
 }
 
 
 sub tweet {
-    my ( $message, $params ) = @_;
+    my ( $message, $params, $stableness ) = @_;
 
     #say( $params->{who} )
+    print $stableness. " ";
     print $params->{who}. " ";
     say encode('UTF-8', "$message");
     #foreach (sort keys %params) {
