@@ -147,6 +147,7 @@ def add_sqlite(conn, account, message):
             (account, message, 0, 0),
         )
     except sqlite3.IntegrityError:
+        # sqlite unicity constraint kicking in
         pass
 
 
