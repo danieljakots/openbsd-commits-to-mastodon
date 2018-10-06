@@ -1,6 +1,7 @@
 # openbsd-commits-to-mastodon
 
-A script that toots each and every OpenBSD commits
+A script that toots each and every OpenBSD commits. It's based on the work and
+idea of afresh1 for [twitter](https://github.com/afresh1/openbsd-commits-to-twitter)
 
 You can follow these accounts:
  * [openbsd_cvs](https://botsin.space/@openbsd_cvs): All commits
