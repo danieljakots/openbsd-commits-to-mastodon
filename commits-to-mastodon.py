@@ -76,7 +76,7 @@ def tootifneeded(conn):
         )
         conn.commit()
         time.sleep(TIME_BETWEEN)
-        # check this commit wasn't tooted by openbs_cvs
+        # check this commit wasn't tooted by openbsd_cvs
         c.execute(
             "SELECT status_cvs FROM obsdcommits WHERE account = ? AND message = ?",
             (account, message),
