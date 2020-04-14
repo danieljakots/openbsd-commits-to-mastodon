@@ -86,11 +86,13 @@ def update_changelog(mirror, changelog_dir):
 
 
 def parse_commits(work_dir, changelog_dir):
+    print("Begin parsing commits (with the perl script)")
     parsed = subprocess.run(
         [f"{work_dir}/parse-commits.pl", f"{changelog_dir}/ChangeLog"],
         stdout=subprocess.PIPE,
         encoding="utf-8",
     )
+    print("Finish parsing commits (with the perl script)")
     return parsed.stdout
 
 
