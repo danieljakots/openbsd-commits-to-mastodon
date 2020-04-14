@@ -16,4 +16,4 @@ COPY ./commits-to-mastodon.py /home/obsdcommits/
 COPY ./createsecret.py /home/obsdcommits/
 COPY ./parse-commits.pl /home/obsdcommits/
 
-CMD ["python", "/home/obsdcommits/commits-to-mastodon.py"]
+CMD ["python", "-u", "/home/obsdcommits/commits-to-mastodon.py"]
