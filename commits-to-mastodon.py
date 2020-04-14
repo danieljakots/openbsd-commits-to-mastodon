@@ -4,114 +4,82 @@
 #
 # Licensed under the MIT license.
 
-import json
 import os
-import sqlite3
 import subprocess
 import time
 
 from mastodon import Mastodon
 
+import psycopg2
+
 
 INSTANCE = "https://botsin.space"
-WORK_DIR = "/home/danj/bots-OpenBSD/"
-SQLITE_DB = WORK_DIR + "/db-commits.db"
-CREDENTIALS = WORK_DIR + "credentials.json"
+WORK_DIR = "/home/obsdcommits/"
 MIRROR = "anoncvs.spacehopper.org/OpenBSD-CVS/CVSROOT/ChangeLog"
 CHANGELOG_DIR = WORK_DIR + "/tmp"
 TIME_BETWEEN = 60
 
 
-def regis_app():
-    """Register app - only once!"""
-    with open(CREDENTIALS, "r") as f:
-        json_cfg = json.load(f)
-    client_id, client_secret = Mastodon.create_app("cvstotoot", api_base_url=INSTANCE)
-    json_cfg["client_cred"] = {"client_id": client_id, "client_secret": client_secret}
-    with open(CREDENTIALS, "w") as f:
-        json.dump(json_cfg, f)
-    return client_id, client_secret
-
-
-def log_bot_in(name, mail, passwd, client_id, client_secret):
-    with open(CREDENTIALS, "r") as f:
-        json_cfg = json.load(f)
-    mastodon = Mastodon(
-        client_id=client_id, client_secret=client_secret, api_base_url=INSTANCE
-    )
-    access_token = mastodon.log_in(mail, passwd)
-    for bot in json_cfg["accounts"]:
-        if bot["name"] != name:
-            continue
-        bot["usercred"] = access_token
-        break
-    with open(CREDENTIALS, "w") as f:
-        json.dump(json_cfg, f)
-
-
 def awoo(account, message):
-    with open(CREDENTIALS, "r") as f:
-        json_cfg = json.load(f)
-    for bot in json_cfg["accounts"]:
-        if bot["name"] != account:
-            continue
-        access_token = bot["usercred"]
-        break
-    mastodon = Mastodon(access_token=access_token, api_base_url=INSTANCE)
-    mastodon.toot(message)
+    access_token = get_credentials(account)
+    print(account, access_token, message)
+    # mastodon = Mastodon(access_token=access_token, api_base_url=INSTANCE)
+    # mastodon.toot(message)
 
 
-def tootifneeded(conn):
-    c = conn.cursor()
-    c.execute("SELECT account, message FROM obsdcommits WHERE status_specific = 0")
-    toots_specific = c.fetchall()
+def awooifneeded():
+    database = db_connect()
+    cursor = database.cursor()
+    cursor.execute("SELECT account, message FROM obsdcommits WHERE status_specific = 0")
+    toots_specific = cursor.fetchall()
     for toot in toots_specific:
         account = toot[0]
         message = toot[1]
         awoo(account, message)
-        c.execute(
+        cursor.execute(
             "UPDATE obsdcommits SET status_specific = 1 "
-            "WHERE account = ? AND message = ?",
+            "WHERE account = %s AND message = %s",
             (account, message),
         )
-        conn.commit()
+        database.commit()
         time.sleep(TIME_BETWEEN)
         # check this commit wasn't tooted by openbsd_cvs
-        c.execute(
-            "SELECT status_cvs FROM obsdcommits WHERE account = ? AND message = ?",
+        cursor.execute(
+            "SELECT status_cvs FROM obsdcommits WHERE account = %s AND message = %s",
             (account, message),
         )
-        if c.fetchone()[0] == 0:
+        if cursor.fetchone()[0] == 0:
             awoo("openbsd_cvs", message)
-            c.execute(
+            cursor.execute(
                 "UPDATE obsdcommits SET status_cvs = 1 "
-                "WHERE account = ? AND message = ?",
+                "WHERE account = %s AND message = %s",
                 (account, message),
             )
-            conn.commit()
+            database.commit()
             time.sleep(TIME_BETWEEN)
-    conn.commit()
+    database.commit()
     # check if anything needs to be tooted by @openbsd_cvs
-    c.execute("SELECT account, message FROM obsdcommits WHERE status_cvs = 0")
-    toots_cvs = c.fetchall()
+    cursor.execute("SELECT account, message FROM obsdcommits WHERE status_cvs = 0")
+    toots_cvs = cursor.fetchall()
     for toot in toots_cvs:
         account = toot[0]
         message = toot[1]
         awoo(account, message)
-        c.execute(
+        cursor.execute(
             "UPDATE obsdcommits SET status_cvs = 1 "
-            "WHERE account = ? AND message = ?",
+            "WHERE account = %s AND message = %s",
             (account, message),
         )
-        conn.commit()
+        database.commit()
         time.sleep(TIME_BETWEEN)
+    database.close()
 
 
 def update_changelog(mirror, changelog_dir):
     if not os.path.exists(changelog_dir):
         os.makedirs(changelog_dir)
     subprocess.run(
-        ["/usr/local/bin/rsync", "-a", f"rsync://{mirror}", changelog_dir],
+        ["/usr/bin/rsync", "-a", f"rsync://{mirror}", changelog_dir],
         stdout=subprocess.PIPE,
         encoding="utf-8",
     )
@@ -126,57 +94,68 @@ def parse_commits(work_dir, changelog_dir):
     return parsed.stdout
 
 
-def sqlite_init(sqlite_file):
+def pgsql_init():
     """Initialize database."""
-    conn = sqlite3.connect(sqlite_file)
-    create_sql = (
+    database = db_connect()
+    cursor = database.cursor()
+    create_obsdcommits = (
         "CREATE TABLE IF NOT EXISTS obsdcommits (account TEXT, message "
         "TEXT, status_specific INTEGER, status_cvs INTEGER, CONSTRAINT "
         "commit_unique UNIQUE (account, message));"
     )
-    with conn:
-        conn.execute(create_sql)
-    conn.close()
+    create_credentials = (
+        "CREATE TABLE IF NOT EXISTS credentials (account TEXT, client_id "
+        "TEXT, client_secret TEXT, access_token TEXT);"
+    )
+    cursor.execute(create_obsdcommits)
+    cursor.execute(create_credentials)
+    database.commit()
+    cursor.close()
+    database.close()
 
 
-def add_sqlite(conn, account, message):
-    try:
-        conn.execute(
-            "INSERT INTO obsdcommits (account, message,"
-            "status_specific, status_cvs) VALUES (?, ?, ?, ?)",
-            (account, message, 0, 0),
-        )
-    except sqlite3.IntegrityError:
-        # sqlite unicity constraint kicking in
-        pass
+def add_commit_to_pgsql(account, message):
+    database = db_connect()
+    cursor = database.cursor()
+    cursor.execute(
+        "INSERT INTO obsdcommits (account, message, "
+        "status_specific, status_cvs) VALUES (%s, %s, %s, %s) ON CONFLICT DO NOTHING;",
+        (account, message, 0, 0),
+    )
+    database.commit()
+    cursor.close()
+    database.close()
 
 
-def masto_init(work_dir):
-    with open(CREDENTIALS, "r") as f:
-        json_cfg = json.load(f)
-    try:
-        client_id = json_cfg["client_cred"]
-        client_secret = json_cfg["client_secret"]
-    except KeyError:
-        client_id, client_secret = regis_app()
-    with open(CREDENTIALS, "r") as f:
-        json_cfg = json.load(f)
-    for bot in json_cfg["accounts"]:
-        name = bot["name"]
-        try:
-            usercred = bot["usercred"]
-        except KeyError:
-            mail = bot["email"]
-            password = bot["password"]
-            log_bot_in(name, mail, password, client_id, client_secret)
+def db_connect():
+    host = os.getenv("PG_HOST", "127.0.0.1")
+    database = os.getenv("PG_DB", "obsdcommits")
+    user = os.getenv("PG_USER", "obsdcommits")
+    password = os.getenv("PG_PASSWORD")
+    port = os.getenv("PG_PORT", "5432")
+    database = psycopg2.connect(
+        host=host, database=database, user=user, password=password, port=port
+    )
+    return database
+
+
+def get_credentials(account):
+    database = db_connect()
+    cursor = database.cursor()
+    cursor.execute(
+        "SELECT client_id, client_secret, access_token FROM credentials WHERE account=%s;",
+        (account,),
+    )
+    client_id, client_secret, access_token = cursor.fetchone()
+    cursor.close()
+    database.close()
+    return client_id, client_secret, access_token
 
 
 def main():
-    masto_init(WORK_DIR)
     update_changelog(MIRROR, CHANGELOG_DIR)
-    sqlite_init(SQLITE_DB)
+    pgsql_init()
     commits = parse_commits(WORK_DIR, CHANGELOG_DIR)
-    conn = sqlite3.connect(SQLITE_DB)
     for line in commits.split("\n"):
         if not line:
             continue
@@ -185,10 +164,8 @@ def main():
         else:
             account = line.split()[1]
         message = " ".join(line.split()[2:])
-        add_sqlite(conn, account, message)
-    conn.commit()
-    tootifneeded(conn)
-    conn.close()
+        add_commit_to_pgsql(account, message)
+    awooifneeded()
 
 
 if __name__ == "__main__":
