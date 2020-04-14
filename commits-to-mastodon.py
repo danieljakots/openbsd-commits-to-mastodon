@@ -17,7 +17,8 @@ INSTANCE = "https://botsin.space"
 WORK_DIR = "/home/obsdcommits/"
 MIRROR = "anoncvs.spacehopper.org/OpenBSD-CVS/CVSROOT/ChangeLog"
 CHANGELOG_DIR = WORK_DIR + "/tmp"
-TIME_BETWEEN = 6
+TIME_BETWEEN_AWOOS = 60
+TIME_BETWEEN_LOOPS = 600
 
 
 def awoo(account, message):
@@ -42,7 +43,7 @@ def awooifneeded():
             (account, message),
         )
         database.commit()
-        time.sleep(TIME_BETWEEN)
+        time.sleep(TIME_BETWEEN_AWOOS)
         # check this commit wasn't tooted by openbsd_cvs
         cursor.execute(
             "SELECT status_cvs FROM obsdcommits WHERE account = %s AND message = %s",
@@ -56,7 +57,7 @@ def awooifneeded():
                 (account, message),
             )
             database.commit()
-            time.sleep(TIME_BETWEEN)
+            time.sleep(TIME_BETWEEN_AWOOS)
     database.commit()
     # check if anything needs to be tooted by @openbsd_cvs
     cursor.execute("SELECT account, message FROM obsdcommits WHERE status_cvs = 0")
@@ -71,7 +72,7 @@ def awooifneeded():
             (account, message),
         )
         database.commit()
-        time.sleep(TIME_BETWEEN)
+        time.sleep(TIME_BETWEEN_AWOOS)
     database.close()
 
 
@@ -156,7 +157,7 @@ def get_credentials(account):
     return client_id, client_secret, access_token
 
 
-def main():
+def loop():
     update_changelog(MIRROR, CHANGELOG_DIR)
     pgsql_init()
     commits = parse_commits(WORK_DIR, CHANGELOG_DIR)
@@ -170,6 +171,12 @@ def main():
         message = " ".join(line.split()[2:])
         add_commit_to_pgsql(account, message)
     awooifneeded()
+
+
+def main():
+    while True:
+        loop()
+        time.sleep(TIME_BETWEEN_LOOPS)
 
 
 if __name__ == "__main__":
