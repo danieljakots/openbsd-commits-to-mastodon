@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2018 Daniel Jakots
+# Copyright (c) 2018, 2020 Daniel Jakots
 #
 # Licensed under the MIT license.
 
