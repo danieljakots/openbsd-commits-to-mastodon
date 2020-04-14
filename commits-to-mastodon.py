@@ -17,7 +17,7 @@ INSTANCE = "https://botsin.space"
 WORK_DIR = "/home/obsdcommits/"
 MIRROR = "anoncvs.spacehopper.org/OpenBSD-CVS/CVSROOT/ChangeLog"
 CHANGELOG_DIR = WORK_DIR + "/tmp"
-TIME_BETWEEN = 60
+TIME_BETWEEN = 6
 
 
 def awoo(account, message):
@@ -76,6 +76,7 @@ def awooifneeded():
 
 
 def update_changelog(mirror, changelog_dir):
+    print("Begin rsync")
     if not os.path.exists(changelog_dir):
         os.makedirs(changelog_dir)
     subprocess.run(
@@ -83,6 +84,7 @@ def update_changelog(mirror, changelog_dir):
         stdout=subprocess.PIPE,
         encoding="utf-8",
     )
+    print("Finish rsync")
 
 
 def parse_commits(work_dir, changelog_dir):
