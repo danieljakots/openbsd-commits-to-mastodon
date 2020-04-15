@@ -45,5 +45,7 @@ PG_PASSWORD=hunter2
 To fill the `credentials` sql table, use
 
 ~~~
-$ #docker-compose run --rm obsdcommits python createsecret.py
+$ docker-compose run --rm obsdcommits python createsecret.py
+# or
+$ docker run -it --rm obsdcommits:16 python createsecret.py
 ~~~
