@@ -31,6 +31,10 @@ def main():
         "INSERT INTO credentials (account, client_id, client_secret, access_token) "
         f"VALUES ('{email}', '{client_id}', '{client_secret}', '{access_token}');"
     )
+    print(
+        f"UPDATE credentials SET client_id='{client_id}', client_secret="
+        f"'{client_secret}', access_token='{access_token}' WHERE account='{email}';"
+    )
 
 
 if __name__ == "__main__":
