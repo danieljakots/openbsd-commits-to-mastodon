@@ -13,3 +13,37 @@ You can follow these accounts:
  * [openbsd_sets](https://botsin.space/@openbsd_sets): New snapshots (still to be done)
 
 See each script for their authors and licenses.
+
+## Maintenance
+
+Create a docker image
+
+~~~
+$ docker build . -t obsdcommits:XXX && DOCKER_UPLOAD obsdcommits:XXX
+~~~
+
+In a docker-compose file
+
+~~~
+  obsdcommits:
+    image: r.chown.me/obsdcommits:XXX
+    restart: always
+    env_file: .env.obsdcommits
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+~~~
+
+The .env.obsdcommits file is something like
+
+~~~
+PG_HOST=10.10.10.42
+PG_PASSWORD=hunter2
+~~~
+
+To fill the `credentials` sql table, use
+
+~~~
+$ #docker-compose run --rm obsdcommits python createsecret.py
+~~~
