@@ -23,7 +23,7 @@ TIME_BETWEEN_LOOPS = 600
 
 def awoo(account, message):
     _, _, access_token = get_credentials(account)
-    print(account, access_token, message)
+    print(account, message)
     mastodon = Mastodon(access_token=access_token, api_base_url=INSTANCE)
     mastodon.toot(message)
 
