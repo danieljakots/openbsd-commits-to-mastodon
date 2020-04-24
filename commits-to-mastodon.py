@@ -21,22 +21,21 @@ TIME_BETWEEN_AWOOS = 60
 TIME_BETWEEN_LOOPS = 600
 
 
-def awoo(account, message):
-    _, _, access_token = get_credentials(account)
+def awoo(database, account, message):
+    _, _, access_token = get_credentials(database, account)
     print(account, message)
     mastodon = Mastodon(access_token=access_token, api_base_url=INSTANCE)
     mastodon.toot(message)
 
 
-def awooifneeded():
-    database = db_connect()
+def awooifneeded(database):
     cursor = database.cursor()
     cursor.execute("SELECT account, message FROM obsdcommits WHERE status_specific = 0")
     toots_specific = cursor.fetchall()
     for toot in toots_specific:
         account = toot[0]
         message = toot[1]
-        awoo(account, message)
+        awoo(database, account, message)
         cursor.execute(
             "UPDATE obsdcommits SET status_specific = 1 "
             "WHERE account = %s AND message = %s",
@@ -50,7 +49,7 @@ def awooifneeded():
             (account, message),
         )
         if cursor.fetchone()[0] == 0:
-            awoo("openbsd_cvs", message)
+            awoo(database, "openbsd_cvs", message)
             cursor.execute(
                 "UPDATE obsdcommits SET status_cvs = 1 "
                 "WHERE account = %s AND message = %s",
@@ -65,7 +64,7 @@ def awooifneeded():
     for toot in toots_cvs:
         account = toot[0]
         message = toot[1]
-        awoo(account, message)
+        awoo(database, account, message)
         cursor.execute(
             "UPDATE obsdcommits SET status_cvs = 1 "
             "WHERE account = %s AND message = %s",
@@ -73,7 +72,6 @@ def awooifneeded():
         )
         database.commit()
         time.sleep(TIME_BETWEEN_AWOOS)
-    database.close()
 
 
 def update_changelog(mirror, changelog_dir):
@@ -99,9 +97,8 @@ def parse_commits(work_dir, changelog_dir):
     return parsed.stdout
 
 
-def pgsql_init():
+def pgsql_init(database):
     """Initialize database."""
-    database = db_connect()
     cursor = database.cursor()
     create_obsdcommits = (
         "CREATE TABLE IF NOT EXISTS obsdcommits (account TEXT, message "
@@ -116,11 +113,9 @@ def pgsql_init():
     cursor.execute(create_credentials)
     database.commit()
     cursor.close()
-    database.close()
 
 
-def add_commit_to_pgsql(account, message):
-    database = db_connect()
+def add_commit_to_pgsql(database, account, message):
     cursor = database.cursor()
     cursor.execute(
         "INSERT INTO obsdcommits (account, message, "
@@ -129,7 +124,6 @@ def add_commit_to_pgsql(account, message):
     )
     database.commit()
     cursor.close()
-    database.close()
 
 
 def db_connect():
@@ -144,8 +138,7 @@ def db_connect():
     return database
 
 
-def get_credentials(account):
-    database = db_connect()
+def get_credentials(database, account):
     cursor = database.cursor()
     cursor.execute(
         "SELECT client_id, client_secret, access_token FROM credentials WHERE account=%s;",
@@ -153,13 +146,13 @@ def get_credentials(account):
     )
     client_id, client_secret, access_token = cursor.fetchone()
     cursor.close()
-    database.close()
     return client_id, client_secret, access_token
 
 
 def loop():
+    database = db_connect()
     update_changelog(MIRROR, CHANGELOG_DIR)
-    pgsql_init()
+    pgsql_init(database)
     commits = parse_commits(WORK_DIR, CHANGELOG_DIR)
     for line in commits.split("\n"):
         if not line:
@@ -169,8 +162,9 @@ def loop():
         else:
             account = line.split()[1]
         message = " ".join(line.split()[2:])
-        add_commit_to_pgsql(account, message)
-    awooifneeded()
+        add_commit_to_pgsql(database, account, message)
+    awooifneeded(database)
+    database.close()
 
 
 def main():
