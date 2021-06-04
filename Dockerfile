@@ -1,4 +1,4 @@
-FROM python:3.8-alpine3.11
+FROM python:3.9-alpine3.13
 
 RUN addgroup -S obsdcommits && adduser -S obsdcommits -G obsdcommits
 WORKDIR /home/obsdcommits
